@@ -29,7 +29,7 @@ function createMainWindow() {
     webPreferences: { nodeIntegration: true }
   })
 
-  if (isDevelopment || true) {
+  if (isDevelopment) {
     window.webContents.openDevTools()
   }
 

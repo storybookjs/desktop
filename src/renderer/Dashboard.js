@@ -135,6 +135,7 @@ const Button = styled.button`
   border-radius: 20px;
   padding: 8px 12px;
   font-weight: bold;
+  outline: 0;
 `
 const Remove = styled.button`
   position: absolute;
@@ -142,6 +143,7 @@ const Remove = styled.button`
   top: 0;
   border: 0;
   background: none;
+  outline: 0;
 `
 
 const getProjectInfo = async path => {
@@ -200,44 +202,51 @@ const Dashboard = () => {
 
   const openProject = async project => {
     if (loading) return
+
     setLoading(project.path)
     const { script, command } = await getStartScript(project.path)
+
     console.log(`Starting 'npm run ${script} -- --ci' (${command})`)
     const cp = spawn(`npm run ${script} -- --ci`, {
       cwd: path.dirname(project.path),
       shell: true
     })
-    const mainWindow = remote.getCurrentWindow()
     process.on("close", () => cp.kill())
+
     // cp.stdout.pipe(process.stdout)
     // cp.stderr.pipe(process.stderr)
     cp.on("error", err => console.error(err))
-    cp.on("close", code => {
-      code ? console.error(`Storybook exited with code: ${code}`) : console.log(`Closed Storybook process.`)
-      mainWindow.show()
-      mainWindow.focus()
-      setLoading(null)
-    })
+    cp.on("close", code => code && console.error(`Storybook exited with code: ${code}`))
+
+    let mainWindow = remote.getCurrentWindow()
     cp.stdout.on("data", data => {
       if (new RegExp("Storybook .* started").test(data)) {
         const message = data.toString()
-        console.log(message)
         const [, url] = message.match(/Local:\s+([^\s]+)/)
-        let win = new BrowserWindow({
+        console.log(message)
+        console.log(`Opening ${url}`)
+
+        let childWindow = new BrowserWindow({
           show: false,
           width: 1280,
           height: 860,
           titleBarStyle: "hidden"
         })
-        win.on("closed", () => {
-          win = null
-          cp.kill()
-        })
-        win.loadURL(url)
-        win.once("ready-to-show", () => {
+        childWindow.loadURL(url)
+        childWindow.once("ready-to-show", () => {
           mainWindow.hide()
-          win.show()
-          win.focus()
+          childWindow.show()
+          childWindow.focus()
+          // childWindow.webContents.openDevTools()
+        })
+        childWindow.once("closed", () => {
+          setLoading(null)
+          mainWindow.show()
+          mainWindow.focus()
+          mainWindow = null
+          childWindow = null
+          console.log(`Terminating Storybook child process`)
+          cp.kill()
         })
       }
     })
