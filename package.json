@@ -1,0 +1,32 @@
+{
+  "name": "@storybook/desktop",
+  "productName": "Storybook",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-webpack dev",
+    "compile": "electron-webpack",
+    "dist": "yarn compile && electron-builder",
+    "dist:dir": "yarn dist --dir -c.compression=store -c.mac.identity=null"
+  },
+  "build": {
+    "appId": "org.js.storybook.desktop",
+    "asar": false
+  },
+  "dependencies": {
+    "@storybook/design-system": "^0.0.43",
+    "electron-context-menu": "^0.13.0",
+    "fix-path": "^2.1.0",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "source-map-support": "^0.5.12",
+    "styled-components": "^4.3.2"
+  },
+  "devDependencies": {
+    "@babel/preset-react": "^7.0.0",
+    "electron": "5.0.6",
+    "electron-builder": "^21.0.11",
+    "electron-webpack": "^2.7.4",
+    "webpack": "~4.35.3"
+  }
+}
