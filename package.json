@@ -10,8 +10,7 @@
     "dist:dir": "yarn dist --dir -c.compression=store -c.mac.identity=null"
   },
   "build": {
-    "appId": "org.js.storybook.desktop",
-    "asar": false
+    "appId": "org.js.storybook.desktop"
   },
   "dependencies": {
     "@storybook/design-system": "^0.0.43",
