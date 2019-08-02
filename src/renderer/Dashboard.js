@@ -136,6 +136,7 @@ const Button = styled.button`
   padding: 8px 12px;
   font-weight: bold;
   outline: 0;
+  cursor: pointer;
 `
 const Remove = styled.button`
   position: absolute;
