@@ -31,6 +31,17 @@ const parseJson = data => {
   }
 }
 
+const parseMessage = data => {
+  const message = data.toString()
+  const lines = message
+    .replace(/[^\x00-\x7F]/g, "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .reverse()
+  return { message, lines }
+}
+
 const { app, dialog, BrowserWindow } = remote
 const homedirRegExp = new RegExp("^" + homedir())
 const projectsFilePath = path.join(app.getPath("userData"), "projects.json")
@@ -125,7 +136,17 @@ const Name = styled.strong`
 `
 const Location = styled.small`
   display: block;
+  height: 16px;
   color: ${styles.color.mediumdark};
+`
+const Output = styled.small`
+  display: block;
+  height: 14px;
+  color: ${props => (props.error ? styles.color.negative : styles.color.mediumdark)};
+  font-family: monospace;
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
 `
 const Button = styled.button`
   font-size: 0.75em;
@@ -170,6 +191,8 @@ const getStartScript = async path => {
 const Dashboard = () => {
   const [loading, setLoading] = React.useState()
   const [projects, setProjects] = React.useState()
+  const [out, setOut] = React.useState()
+  const [err, setErr] = React.useState()
 
   React.useEffect(() => {
     readFile(projectsFilePath)
@@ -204,53 +227,60 @@ const Dashboard = () => {
   const openProject = async project => {
     if (loading) return
 
-    setLoading(project.path)
-    const { script, command } = await getStartScript(project.path)
+    try {
+      setLoading(project.path)
+      const { script, command } = await getStartScript(project.path)
 
-    console.log(`Starting 'npm run ${script} -- --ci' (${command})`)
-    const cp = spawn(`npm run ${script} -- --ci`, {
-      cwd: path.dirname(project.path),
-      shell: true
-    })
-    process.on("close", () => cp.kill())
+      console.log(`Starting 'npm run ${script} -- --ci' (${command})`)
+      const cp = spawn(`npm run ${script} -- --ci`, {
+        cwd: path.dirname(project.path),
+        shell: true
+      })
+      process.on("close", () => cp.kill())
 
-    // cp.stdout.pipe(process.stdout)
-    // cp.stderr.pipe(process.stderr)
-    cp.on("error", err => console.error(err))
-    cp.on("close", code => code && console.error(`Storybook exited with code: ${code}`))
+      cp.on("error", err => console.error(err))
+      cp.on("close", code => code && console.error(`Storybook exited with code: ${code}`))
 
-    let mainWindow = remote.getCurrentWindow()
-    cp.stdout.on("data", data => {
-      if (new RegExp("Storybook .* started").test(data)) {
-        const message = data.toString()
-        const [, url] = message.match(/Local:\s+([^\s]+)/)
+      let mainWindow = remote.getCurrentWindow()
+      cp.stdout.on("data", data => {
+        const { message, lines } = parseMessage(data)
         console.log(message)
-        console.log(`Opening ${url}`)
+        setOut(lines[0])
 
-        let childWindow = new BrowserWindow({
-          show: false,
-          width: 1280,
-          height: 860,
-          titleBarStyle: "hidden"
-        })
-        childWindow.loadURL(url)
-        childWindow.once("ready-to-show", () => {
-          mainWindow.hide()
-          childWindow.show()
-          childWindow.focus()
-          // childWindow.webContents.openDevTools()
-        })
-        childWindow.once("closed", () => {
-          setLoading(null)
-          mainWindow.show()
-          mainWindow.focus()
-          mainWindow = null
-          childWindow = null
-          console.log(`Terminating Storybook child process`)
-          cp.kill()
-        })
-      }
-    })
+        if (new RegExp("Storybook .* started").test(message)) {
+          const [, url] = message.match(/Local:\s+([^\s]+)/)
+          console.log(`Opening ${url}`)
+
+          let childWindow = new BrowserWindow({
+            show: false,
+            width: 1280,
+            height: 860,
+            titleBarStyle: "hidden"
+          })
+          childWindow.loadURL(url)
+          childWindow.once("ready-to-show", () => {
+            mainWindow.hide()
+            childWindow.show()
+            childWindow.focus()
+            // childWindow.webContents.openDevTools()
+          })
+          childWindow.once("closed", () => {
+            setLoading(null)
+            mainWindow.show()
+            mainWindow.focus()
+            mainWindow = null
+            childWindow = null
+            console.log(`Terminating Storybook child process`)
+            cp.kill()
+          })
+        }
+      })
+    } catch (e) {
+      const { message, lines } = parseMessage(e.message)
+      console.error(message)
+      setErr(lines[0])
+      setTimeout(() => setLoading(false), 5000)
+    }
   }
 
   return (
@@ -265,13 +295,16 @@ const Dashboard = () => {
       </Menu>
       <Projects>
         {projects &&
-          projects.map(project => (
-            <Project key={project.path} onClick={() => openProject(project)} isLoading={loading === project.path}>
-              <Name>{project.name}</Name>
-              <Location>{project.location}</Location>
-              <Remove onClick={e => removeProject(e, project)}>×</Remove>
-            </Project>
-          ))}
+          projects.map(project => {
+            const isLoading = loading === project.path
+            return (
+              <Project key={project.path} onClick={() => openProject(project)} isLoading={isLoading}>
+                <Name>{project.name}</Name>
+                {isLoading ? <Output error={!!err}>{err || out}</Output> : <Location>{project.location}</Location>}
+                <Remove onClick={e => removeProject(e, project)}>×</Remove>
+              </Project>
+            )
+          })}
       </Projects>
     </Grid>
   )
